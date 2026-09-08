@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The West &mdash; Ranking Viewer</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Rye&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Chart.js & Date Adapter -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="bg-layer"></div>
+    <div class="overlay"></div>
+    <div id="fullscreenOverlay"></div>
+
+    <header class="app-header">
+        <h1 class="logo">The West <span class="subtitle">Ranking Viewer</span></h1>
+        
+        <div class="global-controls">
+            <!-- Player Search -->
+            <div class="search-container">
+                <input type="text" id="playerSearch" placeholder="Search player..." autocomplete="off">
+                <div class="search-dropdown hidden" id="searchDropdown"></div>
+            </div>
+
+            <!-- Date Range Picker -->
+            <div class="date-controls">
+                <div class="date-inputs">
+                    <input type="date" id="dateFrom">
+                    <span>to</span>
+                    <input type="date" id="dateTo">
+                </div>
+                <div class="date-presets">
+                    <button class="btn preset-btn" data-days="2">2 Days</button>
+                    <button class="btn preset-btn" data-days="7">7 Days</button>
+                    <button class="btn preset-btn" data-days="30">30 Days</button>
+                    <button class="btn preset-btn active" data-days="all">All Time</button>
+                </div>
+            </div>
+        </div>
+
+        <nav class="app-nav">
+            <button class="nav-tab active" data-target="playerView">Player Profile</button>
+            <button class="nav-tab" data-target="comparisonView">Player Comparison</button>
+            <button class="nav-tab" data-target="rankingView">Global Rankings</button>
+            <button class="nav-tab" data-target="groupStatsView">Town & Alliance Stats</button>
+            <button class="nav-tab" data-target="activityView">Player Activity</button>
+        </nav>
+    </header>
+
+    <main class="app-content">
+        <!-- Loader -->
+        <div id="globalLoader" class="loader-overlay hidden">
+            <div class="loader-content">
+                <div class="spinner"></div>
+                <p id="loaderMessage">Loading data...</p>
+                <div class="progress-bar"><div class="progress-fill" id="loaderProgress"></div></div>
+            </div>
+        </div>
+
+        <!-- View: Player Profile -->
+        <section id="playerView" class="view-section active">
+            <div id="playerPlaceholder" class="placeholder-msg">Search and select a player to view their profile.</div>
+            <div id="playerContent" class="hidden">
+                <div class="player-header">
+                    <h2 id="playerNameHeader">Player Name</h2>
+                    <div class="player-meta">
+                        <span id="playerBanDisplay" class="meta-tag ban-meta-tag hidden"></span>
+                        <span class="meta-tag">Level: <span id="playerLevelDisplay"></span></span>
+                        <span class="meta-tag">ID: <span id="playerIdDisplay"></span></span>
+                        <span class="meta-tag">Town: <span id="playerTownDisplay"></span></span>
+                        <span class="meta-tag">Alliance: <span id="playerAllianceDisplay"></span></span>
+                    </div>
+                </div>
+                
+                <div id="playerStatsOverview" class="top-dashboard">
+                    <!-- Overview stats dynamically injected here -->
+                </div>
+                
+                <div id="playerChartsContainer" class="charts-grid">
+                    <!-- Charts dynamically injected here -->
+                </div>
+                
+                <div class="town-alliance-log">
+                    <h3>Town & Alliance History</h3>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Town</th>
+                                <th>Alliance</th>
+                            </tr>
+                        </thead>
+                        <tbody id="townLogBody">
+                            <!-- Log entries dynamically injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- View: Player Comparison -->
+        <section id="comparisonView" class="view-section">
+            <div class="comparison-controls">
+                <div class="selected-players" id="compareSelectedPlayers">
+                    <!-- Added players will appear here as tags -->
+                </div>
+                <div class="compare-stat-select">
+                    <label>Compare by:</label>
+                    <select id="compareStatSelect"></select>
+                </div>
+            </div>
+
+            <div id="comparisonCharts" class="hidden">
+                <div class="chart-row">
+                    <div class="chart-card">
+                        <button class="expand-chart-btn" title="Expand Chart">&#9974;</button>
+                        <h4>Absolute Progress</h4>
+                        <div class="chart-wrapper"><canvas id="compareAbsoluteChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <button class="expand-chart-btn" title="Expand Chart">&#9974;</button>
+                        <h4>Daily Delta</h4>
+                        <div class="chart-wrapper"><canvas id="compareDeltaChart"></canvas></div>
+                    </div>
+                </div>
+                <div class="summary-table-box">
+                    <h3>Summary</h3>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Player</th>
+                                <th>Start Value</th>
+                                <th>End Value</th>
+                                <th>Change</th>
+                                <th>Avg/Day</th>
+                            </tr>
+                        </thead>
+                        <tbody id="compareSummaryBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div id="comparisonPlaceholder" class="placeholder-msg">Add at least 2 players to start comparison.</div>
+        </section>
+
+        <!-- View: Global Rankings -->
+        <section id="rankingView" class="view-section">
+            <div class="ranking-controls">
+                <div class="rank-stat-select">
+                    <label>Rank by:</label>
+                    <select id="rankingStatSelect"></select>
+                </div>
+                <div class="rank-search">
+                    <input type="text" id="rankingSearch" placeholder="Filter by player name...">
+                </div>
+                <button id="loadRankingsBtn" class="btn primary-btn">Load Rankings</button>
+            </div>
+            
+            <div id="rankingPlaceholder" class="placeholder-msg">Click "Load Rankings" to process all players for the selected date range.</div>
+            
+            <div class="table-container hidden" id="rankingTableContainer">
+                <table class="data-table sortable">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th data-sort="name" class="sort-header">Player Name</th>
+                            <th data-sort="start" class="sort-header">Start Value</th>
+                            <th data-sort="end" class="sort-header">End Value</th>
+                            <th data-sort="change" class="sort-header default-sort">Change (&Delta;)</th>
+                            <th data-sort="percent" class="sort-header">Change %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rankingBody"></tbody>
+                </table>
+                <div class="pagination">
+                    <button id="rankPrevBtn" class="btn">Previous</button>
+                    <span id="rankPageInfo">Page 1</span>
+                    <button id="rankNextBtn" class="btn">Next</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- View: Group Stats (Town & Alliance) -->
+        <section id="groupStatsView" class="view-section">
+            <div class="ranking-controls">
+                <div class="rank-stat-select">
+                    <label>Stat:</label>
+                    <select id="groupStatSelect"></select>
+                </div>
+                <div class="rank-search">
+                    <input type="text" id="groupSearch" placeholder="Filter by name...">
+                </div>
+                <button id="loadGroupStatsBtn" class="btn primary-btn">Load Group Stats</button>
+            </div>
+            
+            <div class="table-container hidden" id="groupTableContainer">
+                <div class="activity-tabs">
+                    <button class="group-tab active" data-target="townsStats">&#127968; Towns</button>
+                    <button class="group-tab" data-target="alliancesStats">&#129309; Alliances</button>
+                </div>
+                <table class="data-table sortable">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th data-sort="name" class="group-sort-header">Name</th>
+                            <th data-sort="members" class="group-sort-header">Active Members</th>
+                            <th data-sort="change" class="group-sort-header default-sort">Total Change (&Delta;)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="groupBody"></tbody>
+                </table>
+                <div class="pagination">
+                    <button id="groupPrevBtn" class="btn">Previous</button>
+                    <span id="groupPageInfo">Page 1</span>
+                    <button id="groupNextBtn" class="btn">Next</button>
+                </div>
+            </div>
+            <div id="groupProfileContent" class="hidden">
+                <div style="position: relative;">
+                    <button id="backToGroupListBtn" class="btn" style="position: absolute; left: 0; top: 0;">&larr; Back to List</button>
+                    <div class="player-header">
+                        <h2 id="groupProfileName">Group Name</h2>
+                        <div class="player-meta" style="justify-content: center;">
+                            <span class="meta-tag">Type: <span id="groupProfileTypeDisplay"></span></span>
+                            <span class="meta-tag">ID: <span id="groupProfileIdDisplay"></span></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <div class="activity-tabs">
+                        <button class="group-tab active" data-target="groupChartsPane">&#128200; Charts</button>
+                        <button class="group-tab" data-target="groupMemberLogPane">&#128101; Member Log</button>
+                    </div>
+
+                    <div id="groupChartsPane" class="activity-pane active" style="padding: 1.5rem;">
+                        <div class="charts-grid">
+                            <div class="chart-card">
+                                <button class="expand-chart-btn" title="Expand Chart">&#9974;</button>
+                                <div class="chart-wrapper"><canvas id="groupAbsoluteChart"></canvas></div>
+                            </div>
+                            <div class="chart-card">
+                                <button class="expand-chart-btn" title="Expand Chart">&#9974;</button>
+                                <div class="chart-wrapper"><canvas id="groupDeltaChart"></canvas></div>
+                            </div>
+                            <div class="chart-card" style="grid-column: 1 / -1;">
+                                <button class="expand-chart-btn" title="Expand Chart">&#9974;</button>
+                                <div class="chart-wrapper"><canvas id="groupMembersChart"></canvas></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="groupMemberLogPane" class="activity-pane hidden">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Action</th>
+                                    <th>Player</th>
+                                </tr>
+                            </thead>
+                            <tbody id="groupMemberLogBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div id="groupPlaceholder" class="placeholder-msg">Click 'Load Group Stats' to aggregate town and alliance data.</div>
+        </section>
+
+        <!-- View: Player Activity -->
+        <section id="activityView" class="view-section">
+            <div class="activity-controls">
+                <button id="loadActivityBtn" class="btn primary-btn">Analyze Player Activity</button>
+                <div id="banVisualizationContainer" class="hidden" style="display: flex; align-items: center; justify-content: center; gap: 2rem; width: 100%;">
+                    <div style="width: 450px; height: 250px;">
+                        <canvas id="banPieChart"></canvas>
+                    </div>
+                    <div id="banStatsText" style="color: var(--text-main); font-size: 1.1rem; max-width: 300px;">
+                    </div>
+                </div>
+            </div>
+            <div id="activityContent" class="table-container hidden">
+                <div class="activity-tabs">
+                    <button class="activity-tab active" data-target="actNew">&#10024; New Players</button>
+                    <button class="activity-tab" data-target="actReactivated">&#128281; Reactivated Players</button>
+                    <button class="activity-tab" data-target="actInactive">&#128164; Inactive Players</button>
+                    <button class="activity-tab" data-target="actTownChanges">&#127968; Town Changes</button>
+                    <button class="activity-tab" data-target="actAllianceChanges">&#129309; Alliance Changes</button>
+                    <button class="activity-tab" data-target="actNameChanges">&#128238; Name Changes</button>
+                    <button class="activity-tab" data-target="actBanned">&#128683; Banned Players</button>
+                    <button class="activity-tab" data-target="actBanWaterfall">&#127754; Ban Waterfall</button>
+                </div>
+                
+                <div id="actNew" class="activity-pane active">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>First Seen</th>
+                                <th>Player Name</th>
+                                <th>Exp</th>
+                                <th>Town</th>
+                            </tr>
+                        </thead>
+                        <tbody id="actNewBody"></tbody>
+                    </table>
+                </div>
+
+                <div id="actReactivated" class="activity-pane hidden">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Reactivated On</th>
+                                <th>Player Name</th>
+                                <th>Gap Duration</th>
+                                <th>Exp at Return</th>
+                                <th>Town</th>
+                            </tr>
+                        </thead>
+                        <tbody id="actReactivatedBody"></tbody>
+                    </table>
+                </div>
+
+                <div id="actInactive" class="activity-pane hidden">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Last Seen</th>
+                                <th>Player Name</th>
+                                <th>Final Exp</th>
+                                <th>Final Town</th>
+                            </tr>
+                        </thead>
+                        <tbody id="actInactiveBody"></tbody>
+                    </table>
+                </div>
+                
+                <div id="actTownChanges" class="activity-pane hidden">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Player Name</th>
+                                <th>Previous Town</th>
+                                <th>New Town</th>
+                            </tr>
+                        </thead>
+                        <tbody id="actTownChangesBody"></tbody>
+                    </table>
+                </div>
+
+                <div id="actAllianceChanges" class="activity-pane hidden">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Town</th>
+                                <th>Previous Alliance</th>
+                                <th>New Alliance</th>
+                            </tr>
+                        </thead>
+                        <tbody id="actAllianceChangesBody"></tbody>
+                    </table>
+                </div>
+
+                <div id="actNameChanges" class="activity-pane hidden">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Previous Name</th>
+                                <th>New Name</th>
+                            </tr>
+                        </thead>
+                        <tbody id="actNameChangesBody"></tbody>
+                    </table>
+                </div>
+
+                <div id="actBanned" class="activity-pane hidden">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Date Found</th>
+                                <th>Player Name</th>
+                                <th>Ban Type</th>
+                                <th>Exp</th>
+                                <th>Town</th>
+                            </tr>
+                        </thead>
+                        <tbody id="actBannedBody"></tbody>
+                    </table>
+                </div>
+
+                <div id="actBanWaterfall" class="activity-pane hidden">
+                    <div id="banWaterfallContainer" class="waterfall-container"></div>
+                </div>
+            </div>
+            <div id="activityPlaceholder" class="placeholder-msg">Click 'Analyze Player Activity' to scan player records for the selected date range.</div>
+        </section>
+    </main>
+
+    <button id="scrollTopBtn" class="scroll-top-btn hidden">&#9650;</button>
+
+    <!-- Scripts -->
+    <script src="js/utils.js"></script>
+    <script src="js/chartConfig.js"></script>
+    <script src="js/dataLoader.js"></script>
+    <script src="js/playerView.js"></script>
+    <script src="js/comparisonView.js"></script>
+    <script src="js/rankingView.js"></script>
+    <script src="js/groupStatsView.js"></script>
+    <script src="js/activityView.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
+
+
