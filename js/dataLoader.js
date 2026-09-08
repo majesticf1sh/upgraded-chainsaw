@@ -30,15 +30,20 @@ const DataLoader = (function() {
 
     // Fetches the single bundled JSON file
     async function loadAllPlayers(onProgress) {
-        if (allPlayersArray) {
+        if (allPlayersArray && allPlayersArray.length > 0) {
             if (onProgress) onProgress(allPlayersArray.length, allPlayersArray.length);
             return allPlayersArray;
         }
 
         try {
+            console.log("Fetching data/all_players.json...");
             const res = await fetch('data/all_players.json');
-            if (!res.ok) throw new Error('data/all_players.json not found');
+            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
             const data = await res.json();
+            
+            if (!Array.isArray(data)) {
+                throw new Error("Downloaded data is not an array!");
+            }
             
             allPlayersArray = data;
             
@@ -51,6 +56,7 @@ const DataLoader = (function() {
             return allPlayersArray;
         } catch (err) {
             console.error('Failed to load bundled players data:', err);
+            alert("Failed to load players data: " + err.message + "\n\nPlease try refreshing the page.");
             return [];
         }
     }
