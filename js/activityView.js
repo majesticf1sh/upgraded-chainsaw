@@ -46,9 +46,29 @@ const ActivityView = (function() {
                     } else {
                         activityControls.classList.add('hidden');
                     }
+                    if (target === 'actActivityWaterfall') {
+                        renderGlobalActivityWaterfall();
+                    }
                 }
             });
         });
+
+        // Search and sort listeners for Activity Waterfall
+        const globalWfSearch = document.getElementById('globalWaterfallSearch');
+        if (globalWfSearch) {
+            globalWfSearch.addEventListener('input', (e) => {
+                globalWaterfallSearchQuery = e.target.value.toLowerCase().trim();
+                renderGlobalActivityWaterfall();
+            });
+        }
+
+        const globalWfSort = document.getElementById('globalWaterfallSortSelect');
+        if (globalWfSort) {
+            globalWfSort.addEventListener('change', (e) => {
+                globalWaterfallSortMode = e.target.value;
+                renderGlobalActivityWaterfall();
+            });
+        }
     }
 
     function analyzeActivity() {
@@ -305,6 +325,7 @@ const ActivityView = (function() {
         
         renderBanVisualization(bannedPlayers);
         renderBanWaterfall();
+        renderGlobalActivityWaterfall();
         
         // Ensure the controls are hidden if we are not on the banned tab
         const activeTab = document.querySelector('.activity-tab.active');
@@ -316,6 +337,8 @@ const ActivityView = (function() {
     }
     
     let banPieChartInstance = null;
+    let globalWaterfallSearchQuery = "";
+    let globalWaterfallSortMode = "activeDesc";
     
     function renderBanVisualization(bannedPlayers) {
         const container = document.getElementById('banVisualizationContainer');
@@ -471,7 +494,12 @@ const ActivityView = (function() {
             if (currentSegment) segments.push(currentSegment);
             
             if (segments.length > 0) {
-                waterfallData.push({ id: p.id, name: p.name, segments });
+                waterfallData.push({ 
+                    id: p.id, 
+                    name: p.name, 
+                    segments,
+                    lastPlayerDate: playerDates[playerDates.length - 1]
+                });
             }
         });
         
@@ -518,7 +546,7 @@ const ActivityView = (function() {
                 html += '<div class="wf-bar ' + cssClass + '" style="left: ' + left + '%; width: ' + width + '%; min-width: 0; padding: 0;" title="' + seg.type + ' (' + days + ' days)\nFrom ' + seg.start + ' to ' + seg.end + '">' + days + 'd</div>';
                 
                 const lastGlobalDate = globalDates[globalDates.length - 1];
-                if (seg === p.segments[p.segments.length - 1] && cssClass === 'permanent' && seg.end < lastGlobalDate) {
+                if (seg === p.segments[p.segments.length - 1] && cssClass === 'permanent' && seg.end < lastGlobalDate && seg.end === p.lastPlayerDate) {
                     html += '<div style="position: absolute; left: ' + right + '%; top: 50%; transform: translateY(-50%); margin-left: 6px; font-size: 0.9rem; cursor: help; z-index: 5;" title="Account Deleted (permanent ban ended in deletion)">&#10060;</div>';
                 }
             });
@@ -540,6 +568,202 @@ const ActivityView = (function() {
     }
 
 
+
+    
+    function renderGlobalActivityWaterfall() {
+        const container = document.getElementById('globalActivityWaterfallContainer');
+        if (!container) return;
+        container.innerHTML = '';
+
+        const from = AppState.dateFrom || '0000-00-00';
+        const to = AppState.dateTo || '9999-99-99';
+
+        let globalDatesSet = new Set();
+        allPlayersData.forEach(p => {
+            Object.keys(p.history).forEach(d => {
+                if (d >= from && d <= to) globalDatesSet.add(d);
+            });
+        });
+        const globalDates = Array.from(globalDatesSet).sort();
+        if (globalDates.length === 0) {
+            container.innerHTML = '<div style="text-align:center; padding: 2rem; color: var(--text-muted);">No dates in range.</div>';
+            return;
+        }
+
+        const minTime = new Date(globalDates[0]).getTime();
+        const maxTime = new Date(globalDates[globalDates.length - 1]).getTime() + 86400000;
+        const totalTime = maxTime - minTime || 86400000;
+
+        let targetPlayers = allPlayersData;
+        if (globalWaterfallSearchQuery) {
+            targetPlayers = targetPlayers.filter(p => p.name.toLowerCase().includes(globalWaterfallSearchQuery));
+        }
+
+        let waterfallList = [];
+
+        targetPlayers.forEach(p => {
+            const allPDates = Object.keys(p.history).sort();
+            if (allPDates.length === 0) return;
+
+            const firstDate = allPDates[0];
+            const lastDate = allPDates[allPDates.length - 1];
+
+            let segments = [];
+            let currentSegment = null;
+            let activeDays = 0;
+            let idleDays = 0;
+
+            globalDates.forEach(d => {
+                if (d < firstDate || d > lastDate) {
+                    if (currentSegment) {
+                        segments.push(currentSegment);
+                        currentSegment = null;
+                    }
+                    return;
+                }
+
+                const s = p.history[d];
+                let type = 'idle';
+                let bantype = null;
+                let dayExp = 0;
+
+                if (s) {
+                    if (s.bantype && s.bantype !== 'no') {
+                        type = 'banned';
+                        bantype = s.bantype;
+                    } else {
+                        const dIdx = allPDates.indexOf(d);
+                        const prev = dIdx > 0 ? p.history[allPDates[dIdx - 1]] : null;
+                        if (prev) {
+                            const deltaExp = (s.exp || 0) - (prev.exp || 0);
+                            const deltaTasks = (s.tasksFinished || 0) - (prev.tasksFinished || 0);
+                            const deltaDuels = ((s.duelsWon || 0) + (s.duelsLost || 0)) - ((prev.duelsWon || 0) + (prev.duelsLost || 0));
+                            const deltaConstr = (s.usedConstructionPoints || 0) - (prev.usedConstructionPoints || 0);
+                            if (deltaExp > 0 || deltaTasks > 0 || deltaDuels > 0 || deltaConstr > 0) {
+                                type = 'active';
+                                dayExp = Math.max(0, deltaExp);
+                            }
+                        } else {
+                            type = 'active';
+                        }
+                    }
+                }
+
+                if (type === 'active') activeDays++;
+                else if (type === 'idle') idleDays++;
+
+                if (!currentSegment) {
+                    currentSegment = { start: d, end: d, type, bantype, expGain: dayExp };
+                } else if (currentSegment.type === type && currentSegment.bantype === bantype) {
+                    currentSegment.end = d;
+                    currentSegment.expGain = (currentSegment.expGain || 0) + dayExp;
+                } else {
+                    segments.push(currentSegment);
+                    currentSegment = { start: d, end: d, type, bantype, expGain: dayExp };
+                }
+            });
+
+            if (currentSegment) segments.push(currentSegment);
+
+            if (segments.length > 0) {
+                waterfallList.push({
+                    id: p.id,
+                    name: p.name,
+                    segments,
+                    activeDays,
+                    idleDays
+                });
+            }
+        });
+
+        if (globalWaterfallSortMode === 'name') {
+            waterfallList.sort((a, b) => a.name.localeCompare(b.name));
+        } else if (globalWaterfallSortMode === 'idleDesc') {
+            waterfallList.sort((a, b) => b.idleDays - a.idleDays);
+        } else {
+            waterfallList.sort((a, b) => b.activeDays - a.activeDays);
+        }
+
+        const isCapped = !globalWaterfallSearchQuery && waterfallList.length > 50;
+        const displayList = isCapped ? waterfallList.slice(0, 50) : waterfallList;
+
+        if (displayList.length === 0) {
+            const noMatchMsg = globalWaterfallSearchQuery 
+                ? 'No players found matching "' + escapeHTML(globalWaterfallSearchQuery) + '".' 
+                : 'No players found for this period.';
+            container.innerHTML = '<div style="text-align:center; padding: 2rem; color: var(--text-muted);">' + noMatchMsg + '</div>';
+            return;
+        }
+
+        let html = '';
+        if (isCapped) {
+            html += '<div style="color:var(--text-muted); font-size:0.85rem; margin-bottom: 0.8rem; font-style: italic;">Showing top 50 most active players (' + waterfallList.length + ' total players tracked). Use the search above to view any specific player.</div>';
+        } else if (globalWaterfallSearchQuery) {
+            html += '<div style="color:var(--text-muted); font-size:0.85rem; margin-bottom: 0.8rem; font-style: italic;">Found ' + displayList.length + ' player' + (displayList.length === 1 ? '' : 's') + ' matching "' + escapeHTML(globalWaterfallSearchQuery) + '".</div>';
+        }
+
+        html += '<div class="wf-header" style="position: relative; height: 32px;"><div class="wf-name" style="font-weight:600; color:var(--accent);">Player / Activity</div><div style="position: relative; flex-grow: 1;">';
+        const numTicks = 4;
+        for (let i = 0; i <= numTicks; i++) {
+            const perc = (i / numTicks);
+            const t = minTime + totalTime * perc;
+            const label = new Date(t).toISOString().split('T')[0];
+            let transform = 'translateX(-50%)';
+            if (i === 0) transform = 'translateX(0)';
+            if (i === numTicks) transform = 'translateX(-100%)';
+            html += `<div class="wf-axis-label" style="left: ${perc * 100}%; transform: ${transform}; font-weight:500;">${label}</div>`;
+        }
+        html += '</div></div>';
+
+        displayList.forEach(p => {
+            html += '<div class="wf-row">';
+            html += `<div class="wf-name">
+                <a href="#" class="player-link" data-id="${p.id}" title="${escapeHTML(p.name)}">${escapeHTML(p.name)}</a>
+                <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+                    <span style="color:var(--green); font-weight:600;">${p.activeDays}d</span> active · <span>${p.idleDays}d</span> idle
+                </div>
+            </div>`;
+            html += '<div class="wf-timeline">';
+
+            p.segments.forEach(seg => {
+                const sTime = new Date(seg.start).getTime();
+                const eTime = new Date(seg.end).getTime() + 86400000;
+
+                const left = Math.max(0, (sTime - minTime) / totalTime * 100);
+                const right = Math.min(100, (eTime - minTime) / totalTime * 100);
+                const width = Math.max(0.6, right - left);
+                const days = Math.round((eTime - sTime) / 86400000);
+
+                let cssClass = 'wf-idle';
+                let tooltip = `Idle (${days} days)\n${seg.start} to ${seg.end}\nNo progress recorded`;
+
+                if (seg.type === 'active') {
+                    cssClass = 'wf-active';
+                    tooltip = `Active (${days} days)\n${seg.start} to ${seg.end}\nExp gained: +${formatNumber(seg.expGain || 0)}`;
+                } else if (seg.type === 'banned') {
+                    cssClass = 'wf-banned';
+                    tooltip = `Banned: ${seg.bantype || 'banned'} (${days} days)\n${seg.start} to ${seg.end}`;
+                }
+
+                const label = width > 4 ? `${days}d` : '';
+                html += `<div class="wf-bar ${cssClass}" style="left: ${left}%; width: ${width}%; min-width: 0;" title="${tooltip}">${label}</div>`;
+            });
+
+            html += '</div></div>';
+        });
+
+        container.innerHTML = html;
+
+        container.querySelectorAll('.player-link').forEach(a => {
+            a.addEventListener('click', (e) => {
+                e.preventDefault();
+                const id = Number(e.currentTarget.dataset.id);
+                document.getElementById('playerSearch').value = e.currentTarget.textContent.trim();
+                document.querySelector('.nav-tab[data-target="playerView"]').click();
+                if (typeof PlayerView !== 'undefined') PlayerView.loadAndRender(id);
+            });
+        });
+    }
 
     function renderTable(tbodyId, data, rowGenerator) {
         const tbody = document.getElementById(tbodyId);

@@ -89,20 +89,47 @@
                     <!-- Charts dynamically injected here -->
                 </div>
                 
-                <div class="town-alliance-log">
-                    <h3>Town & Alliance History</h3>
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Town</th>
-                                <th>Alliance</th>
-                            </tr>
-                        </thead>
-                        <tbody id="townLogBody">
-                            <!-- Log entries dynamically injected here -->
-                        </tbody>
-                    </table>
+                                <div class="town-alliance-log" id="townAllianceLogContainer">
+                    <div class="town-log-header">
+                        <div class="town-log-title-area">
+                            <h3>🏛️ Town &amp; Alliance History</h3>
+                            <span class="town-log-subtitle" id="townLogSubtitle">Tracked affiliations, stays, and transfers</span>
+                        </div>
+                        <div class="town-log-controls">
+                            <label class="town-log-checkbox-label" id="townLogDateFilterLabel" style="display: none;">
+                                <input type="checkbox" id="townLogDateFilterCheck"> In Active Date Filter
+                            </label>
+                            <label class="town-log-checkbox-label">
+                                <input type="checkbox" id="townLogHideHomeless"> Only Towns
+                            </label>
+                            <button id="townLogSortBtn" class="btn-subtle" type="button" title="Toggle Sort Order">
+                                <span id="townLogSortIcon">⬇ Newest First</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Summary Stats Bar -->
+                    <div class="town-log-summary" id="townLogSummary">
+                        <!-- Dynamic summary pills injected here -->
+                    </div>
+
+                    <!-- Timeline / Interval Table -->
+                    <div class="table-container town-log-table-container">
+                        <table class="data-table town-log-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 120px;">Status</th>
+                                    <th style="width: 250px;">Time Period</th>
+                                    <th style="width: 120px;">Duration</th>
+                                    <th>Town</th>
+                                    <th>Alliance</th>
+                                </tr>
+                            </thead>
+                            <tbody id="townLogBody">
+                                <!-- Log entries dynamically injected here -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </section>
@@ -224,24 +251,91 @@
                 </div>
             </div>
             <div id="groupProfileContent" class="hidden">
-                <div style="position: relative;">
+                <div style="position: relative; margin-bottom: 1.5rem;">
                     <button id="backToGroupListBtn" class="btn" style="position: absolute; left: 0; top: 0;">&larr; Back to List</button>
                     <div class="player-header">
                         <h2 id="groupProfileName">Group Name</h2>
                         <div class="player-meta" style="justify-content: center;">
-                            <span class="meta-tag">Type: <span id="groupProfileTypeDisplay"></span></span>
-                            <span class="meta-tag">ID: <span id="groupProfileIdDisplay"></span></span>
+                            <span class="meta-tag">Type: <span id="groupProfileTypeDisplay">Town</span></span>
+                            <span class="meta-tag">ID: <span id="groupProfileIdDisplay">-</span></span>
+                            <span class="meta-tag" id="groupProfileAllianceMeta">Alliance: <span id="groupProfileAllianceDisplay">None</span></span>
+                            <span class="meta-tag">Citizens: <span id="groupProfileCitizenCountDisplay">0</span></span>
+                            <span class="meta-tag">Avg Level: <span id="groupProfileAvgLevelDisplay">0</span></span>
                         </div>
                     </div>
                 </div>
 
+                <!-- Town Overview Top Dashboard -->
+                <div class="top-dashboard" id="groupProfileOverviewDashboard"></div>
+
                 <div class="table-container">
-                    <div class="activity-tabs">
-                        <button class="group-tab active" data-target="groupChartsPane">&#128200; Charts</button>
-                        <button class="group-tab" data-target="groupMemberLogPane">&#128101; Member Log</button>
+                    <div class="activity-tabs" id="groupProfileTabs">
+                        <button class="group-tab active" data-target="groupRosterPane">&#128101; Citizens (<span id="rosterTabCount">0</span>)</button>
+                        <button class="group-tab" data-target="groupActivityWaterfallPane">&#127754; Activity Waterfall</button>
+                        <button class="group-tab" data-target="groupChartsPane">&#128200; Charts & Analytics</button>
+                        <button class="group-tab" data-target="groupMemberLogPane">&#128220; Member Log</button>
+                        <button class="group-tab hidden" id="allianceTownsTabBtn" data-target="groupAllianceTownsPane">&#127968; Member Towns (<span id="allianceTownCount">0</span>)</button>
                     </div>
 
-                    <div id="groupChartsPane" class="activity-pane active" style="padding: 1.5rem;">
+                    <!-- Pane 1: Citizens / Current Players Roster -->
+                    <div id="groupRosterPane" class="activity-pane active" style="padding: 1.5rem;">
+                        <div class="roster-toolbar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">
+                            <div style="display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap;">
+                                <input type="text" id="rosterSearch" placeholder="Filter citizens by name..." style="min-width: 220px;">
+                                <div class="btn-group" style="display: flex; gap: 0.3rem;">
+                                    <button class="btn roster-filter-btn active" data-filter="current">Current Citizens</button>
+                                    <button class="btn roster-filter-btn" data-filter="departed">Departed</button>
+                                    <button class="btn roster-filter-btn" data-filter="all">All in Period</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="overflow-x: auto;">
+                            <table class="data-table sortable" id="groupRosterTable">
+                                <thead>
+                                    <tr>
+                                        <th data-sort="rank" class="roster-sort-header">Rank</th>
+                                        <th data-sort="name" class="roster-sort-header">Citizen Name</th>
+                                        <th data-sort="level" class="roster-sort-header">Level</th>
+                                        <th data-sort="endVal" class="roster-sort-header" id="rosterStatHeader">Current Stat</th>
+                                        <th data-sort="change" class="roster-sort-header default-sort">Change (&Delta;)</th>
+                                        <th data-sort="construction" class="roster-sort-header">Construction Pts</th>
+                                        <th data-sort="duels" class="roster-sort-header">Duels (W / L)</th>
+                                        <th data-sort="status" class="roster-sort-header">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="groupRosterBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Pane 2: Activity Waterfall -->
+                    <div id="groupActivityWaterfallPane" class="activity-pane hidden" style="padding: 1.5rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">
+                            <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                                <input type="text" id="waterfallSearch" placeholder="Filter players..." style="min-width: 200px;">
+                                <div class="waterfall-legend" style="display: flex; gap: 1rem; font-size: 0.85rem; color: var(--text-muted); align-items: center; flex-wrap: wrap;">
+                                    <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 2px; background: rgba(74, 222, 128, 0.85);"></span> Active (progress made)</span>
+                                    <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 2px; background: rgba(120, 113, 108, 0.4); border: 1px solid rgba(168, 162, 158, 0.5);"></span> Idle (no progress)</span>
+                                    <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 2px; background: rgba(239, 68, 68, 0.85);"></span> Banned</span>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <label style="color: var(--text-muted); font-size: 0.85rem;">Sort by:</label>
+                                <select id="waterfallSortSelect" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">
+                                    <option value="activeDesc" selected>Most Active Days</option>
+                                    <option value="idleDesc">Most Idle Days</option>
+                                    <option value="rateDesc">Highest Activity %</option>
+                                    <option value="name">Name (A-Z)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="groupWaterfallContainer" class="waterfall-container" style="overflow-x: auto; width: 100%;"></div>
+                    </div>
+
+                    <!-- Pane 2: Charts & Analytics -->
+                    <div id="groupChartsPane" class="activity-pane hidden" style="padding: 1.5rem;">
                         <div class="charts-grid">
                             <div class="chart-card">
                                 <button class="expand-chart-btn" title="Expand Chart">&#9974;</button>
@@ -251,24 +345,55 @@
                                 <button class="expand-chart-btn" title="Expand Chart">&#9974;</button>
                                 <div class="chart-wrapper"><canvas id="groupDeltaChart"></canvas></div>
                             </div>
-                            <div class="chart-card" style="grid-column: 1 / -1;">
+                            <div class="chart-card">
                                 <button class="expand-chart-btn" title="Expand Chart">&#9974;</button>
                                 <div class="chart-wrapper"><canvas id="groupMembersChart"></canvas></div>
+                            </div>
+                            <div class="chart-card">
+                                <button class="expand-chart-btn" title="Expand Chart">&#9974;</button>
+                                <div class="chart-wrapper"><canvas id="groupContributionChart"></canvas></div>
+                            </div>
+                            <div class="chart-card" style="grid-column: 1 / -1;">
+                                <button class="expand-chart-btn" title="Expand Chart">&#9974;</button>
+                                <div class="chart-wrapper"><canvas id="groupLevelDistChart"></canvas></div>
                             </div>
                         </div>
                     </div>
 
-                    <div id="groupMemberLogPane" class="activity-pane hidden">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Action</th>
-                                    <th>Player</th>
-                                </tr>
-                            </thead>
-                            <tbody id="groupMemberLogBody"></tbody>
-                        </table>
+                    <!-- Pane 3: Member Log -->
+                    <div id="groupMemberLogPane" class="activity-pane hidden" style="padding: 1.5rem;">
+                        <div id="memberLogSummary" style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1rem;"></div>
+                        <div style="overflow-x: auto;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Action</th>
+                                        <th>Citizen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="groupMemberLogBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Pane 4: Member Towns (Alliance view only) -->
+                    <div id="groupAllianceTownsPane" class="activity-pane hidden" style="padding: 1.5rem;">
+                        <div style="overflow-x: auto;">
+                            <table class="data-table sortable" id="groupAllianceTownsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Rank</th>
+                                        <th>Town Name</th>
+                                        <th>Active Citizens</th>
+                                        <th id="allianceTownsStatHeader">Total Stat</th>
+                                        <th>Change (&Delta;)</th>
+                                        <th>Avg Level</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="groupAllianceTownsBody"></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -297,6 +422,7 @@
                     <button class="activity-tab" data-target="actNameChanges">&#128238; Name Changes</button>
                     <button class="activity-tab" data-target="actBanned">&#128683; Banned Players</button>
                     <button class="activity-tab" data-target="actBanWaterfall">&#127754; Ban Waterfall</button>
+                    <button class="activity-tab" data-target="actActivityWaterfall">&#127754; Activity Waterfall</button>
                 </div>
                 
                 <div id="actNew" class="activity-pane active">
@@ -401,6 +527,28 @@
 
                 <div id="actBanWaterfall" class="activity-pane hidden">
                     <div id="banWaterfallContainer" class="waterfall-container"></div>
+                </div>
+
+                <div id="actActivityWaterfall" class="activity-pane hidden" style="padding: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">
+                        <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                            <input type="text" id="globalWaterfallSearch" placeholder="Filter players by name..." style="min-width: 220px;">
+                            <div class="waterfall-legend" style="display: flex; gap: 1rem; font-size: 0.85rem; color: var(--text-muted); align-items: center; flex-wrap: wrap;">
+                                <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 2px; background: rgba(74, 222, 128, 0.85);"></span> Active</span>
+                                <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 2px; background: rgba(120, 113, 108, 0.4); border: 1px solid rgba(168, 162, 158, 0.5);"></span> Idle</span>
+                                <span style="display: flex; align-items: center; gap: 5px;"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 2px; background: rgba(239, 68, 68, 0.85);"></span> Banned</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            <label style="color: var(--text-muted); font-size: 0.85rem;">Sort by:</label>
+                            <select id="globalWaterfallSortSelect" style="padding: 0.3rem 0.6rem; font-size: 0.85rem;">
+                                <option value="activeDesc" selected>Most Active Days</option>
+                                <option value="idleDesc">Most Idle Days</option>
+                                <option value="name">Name (A-Z)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="globalActivityWaterfallContainer" class="waterfall-container" style="overflow-x: auto; width: 100%;"></div>
                 </div>
             </div>
             <div id="activityPlaceholder" class="placeholder-msg">Click 'Analyze Player Activity' to scan player records for the selected date range.</div>

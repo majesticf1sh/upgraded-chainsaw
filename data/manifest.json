@@ -1,0 +1,9 @@
+{
+  "files": [
+    "data/all_players_part1.json",
+    "data/all_players_part2.json"
+  ],
+  "totalPlayers": 1903,
+  "chunkCount": 2,
+  "generatedAt": "2026-11-19T20:29:30.134Z"
+}
